@@ -17,9 +17,13 @@ struct superblock{
 	uint8_t padding[4079];
 };
 
+struct fat_block{
+	uint16_t fat_array[2048]; 
+};
+
 struct file_system{
 	struct superblock* superblock;
-	struct file_allocation_table* fat;
+	struct fat_block* fat;
 	struct root_directory* root;
 	struct data_block* data;
 };
@@ -35,6 +39,18 @@ int fs_mount(const char *diskname)
 		return -1;
 	}
 	fs = malloc(sizeof(struct file_system));
+	fs->superblock = malloc(sizeof(struct superblock));
+	if(block_read(0, fs->superblock)==-1){
+		return -1;
+	}
+	//Insert error checking on disk info here
+	uint8_t fat_size = fs->superblock->fat_size;
+	fs->fat = malloc(sizeof(struct fat_block)*fat_size);
+	for(int i=0; i<fat_size; i++){
+		if(block_read(i+1, fs->fat[i])==-1){
+			return -1;
+		}
+	}
 }
 
 int fs_umount(void)
