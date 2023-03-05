@@ -7,11 +7,34 @@
 #include "disk.h"
 #include "fs.h"
 
+struct superblock{
+	uint64_t signature;
+	uint16_t total_blocks;
+	uint16_t root_index;
+	uint16_t data_index;
+	uint16_t data_size;
+	uint8_t fat_size;
+	uint8_t padding[4079];
+};
+
+struct file_system{
+	struct superblock* superblock;
+	struct file_allocation_table* fat;
+	struct root_directory* root;
+	struct data_block* data;
+};
+
 /* TODO: Phase 1 */
+
+struct file_system* fs;
 
 int fs_mount(const char *diskname)
 {
 	/* TODO: Phase 1 */
+	if(block_disk_open(*diskname)==-1){
+		return -1;
+	}
+	fs = malloc(sizeof(struct file_system));
 }
 
 int fs_umount(void)
