@@ -43,13 +43,20 @@ struct  __attribute__((__packed__)) file_system{
 	struct data_block* data_blocks[8192];
 };
 
+struct  __attribute__((__packed__)) fd_entry{
+	bool empty;
+	int index_in_rootdir;
+	int offset;
+};
+
+struct fd_entry open_files[FS_OPEN_MAX_COUNT];
+
 /* TODO: Phase 1 */
 
 struct file_system* fs;
 
 int fs_mount(const char *diskname)
 {
-	printf("Mounting!\n");
 	/* TODO: Phase 1 */
 	if(block_disk_open(diskname)==-1){
 		return -1;
@@ -60,27 +67,26 @@ int fs_mount(const char *diskname)
 		return -1;
 	}
 	//Insert error checking on disk info here
-	char* correct_name = "ECS150FS";
-	char* signature = fs->superblock->signature;
+	//char* correct_name = "ECS150FS";
+	//char* signature = fs->superblock->signature;
 	uint8_t fat_size = fs->superblock->fat_size;
 	uint16_t root_index = fs->superblock->root_index;
 	uint16_t data_index = fs->superblock->data_index;
 	uint16_t data_count = fs->superblock->data_size;
 	uint16_t total_blocks = fs->superblock->total_blocks;
-	printf("Signature: %s\n", signature);
-	printf("FAT count: %d\n", fat_size);
-	printf("Root index: %d\n", root_index);
-	printf("Data index: %d\n", data_index);
-	printf("Data Count: %d\n", data_count);
-	printf("Total: %d\n", total_blocks);
-	printf("Compare: %d\n", strcmp(signature, correct_name));
+	// printf("Signature: %s\n", signature);
+	// printf("FAT count: %d\n", fat_size);
+	// printf("Root index: %d\n", root_index);
+	// printf("Data index: %d\n", data_index);
+	// printf("Data Count: %d\n", data_count);
+	// printf("Total: %d\n", total_blocks);
+	// printf("Compare: %d\n", strcmp(signature, correct_name));
 	/*if(strcmp(signature,"ECS150FS")!=0 || (1+fat_size)!=root_index || (root_index+1)!=data_index){
 		free(fs->superblock);
 		free(fs);
 		return -1;
 	}*/
 
-	printf("Mounting 2\n");
 	if(block_disk_count()!=total_blocks || (1+fat_size+1+data_count)!=total_blocks){
 		free(fs->superblock);
 		free(fs);
@@ -131,6 +137,12 @@ int fs_mount(const char *diskname)
 			return -1;
 		}
 	}
+
+	// initialize open files
+	for (int i = 0; i < FS_OPEN_MAX_COUNT; i++) {
+		open_files[i].empty = true;
+	}
+
 	return 0;
 }
 
@@ -188,12 +200,12 @@ int fs_info(void)
 	return -1;
 }
 
-bool file_is_empty(struct root_directory entry) {
+bool no_file_exists(struct root_directory entry) {
 	return entry.filename[0] == '\0';
 }
 
 bool has_same_filename(struct root_directory entry, const char *filename) {
-	if (file_is_empty(entry)) {
+	if (no_file_exists(entry)) {
 		return false;
 	}
 	return strcmp(entry.filename, filename) == 0;
@@ -207,7 +219,7 @@ int fs_create(const char *filename)
 
 
 	int ind_to_add = 0;
-	while (ind_to_add < FS_FILE_MAX_COUNT && !file_is_empty(fs->root_dir[ind_to_add])) {
+	while (ind_to_add < FS_FILE_MAX_COUNT && !no_file_exists(fs->root_dir[ind_to_add])) {
 		if (has_same_filename(fs->root_dir[ind_to_add], filename)) {
 			return -1;
 		}
@@ -245,38 +257,89 @@ int fs_delete(const char *filename)
 
 int fs_ls(void)
 {
-	return -1;
+	if (fs == NULL) {
+		return -1;
+	}
+
+	printf("FS Ls:\n");
+	for (int i = 0; i < FS_FILE_MAX_COUNT; i++) {
+		if (no_file_exists(fs->root_dir[i])) {
+			continue;
+		}
+		struct root_directory entry = fs->root_dir[i];
+		printf("file: %s, size: %d, data_blk: %d\n", entry.filename, entry.size, entry.data_index);
+	}
+	
+	return 0;
 }
 
 int fs_open(const char *filename)
 {
-	if(filename){
+	if(fs == NULL || filename == NULL || filename[strlen(filename)] != '\0'){
 		return -1;
 	}
-	return -1;
+
+	int ind_of_file = 0;
+	while(ind_of_file < FS_FILE_MAX_COUNT && !has_same_filename(fs->root_dir[ind_of_file], filename)) {
+		ind_of_file++;
+	}
+	if (ind_of_file == FS_FILE_MAX_COUNT) {
+		return -1;
+	}
+
+	int ind_to_open = 0;
+	while (ind_to_open < FS_OPEN_MAX_COUNT && !open_files[ind_to_open].empty) {
+		ind_to_open++;
+	}
+	if (ind_to_open == FS_OPEN_MAX_COUNT) {
+		return -1;
+	}
+
+	open_files[ind_to_open].empty = false;
+	open_files[ind_to_open].index_in_rootdir = ind_to_open;
+	open_files[ind_to_open].offset = 0;
+	return ind_to_open;
+}
+
+bool fd_is_invalid(int fd) {
+	return fd < 0 || fd >= FS_OPEN_MAX_COUNT;
 }
 
 int fs_close(int fd)
 {
-	if(fd){
+	if (fs == NULL || fd_is_invalid(fd) || open_files[fd].empty) {
 		return -1;
 	}
+
+	open_files[fd].empty = true;
 	return 0;
 }
 
 int fs_stat(int fd)
 {
-	if(fd){
+	if (fs == NULL || fd_is_invalid(fd) || open_files[fd].empty) {
 		return -1;
 	}
-	return -1;
+
+	return fs->root_dir[open_files[fd].index_in_rootdir].size;
 }
 
 int fs_lseek(int fd, size_t offset)
 {
-	if(fd || offset){
+	if (fs == NULL || fd_is_invalid(fd) || open_files[fd].empty) {
 		return -1;
 	}
+
+	struct root_directory* entry = &(fs->root_dir[open_files[fd].index_in_rootdir]);
+	if (offset < entry->size) {
+		open_files[fd].offset = offset;
+	} else if (offset == entry->size) {
+		entry->size += 1;
+		open_files[fd].offset = offset;
+	} else {
+		return -1;
+	}
+
 	return 0;
 }
 
