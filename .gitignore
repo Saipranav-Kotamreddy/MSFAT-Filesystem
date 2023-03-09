@@ -1,3 +1,10 @@
 Dockerfile
 test.sh
 apps/test_phase2.c
+apps/*.x
+apps/*.o
+apps/*.d
+libfs/*.a
+libfs/*.x
+libfs/*.o
+libfs/*.d

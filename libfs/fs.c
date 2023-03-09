@@ -211,43 +211,63 @@ bool has_same_filename(struct root_directory entry, const char *filename) {
 	return strcmp(entry.filename, filename) == 0;
 }
 
-int fs_create(const char *filename)
-{	
-	if(fs == NULL || filename == NULL || strlen(filename) >= FS_FILENAME_LEN || filename[strlen(filename)] != '\0'){
-		return -1;
-	}
+bool filename_is_invalid(const char *filename) {
+	return filename[strlen(filename)] != '\0';
+}
 
-
-	int ind_to_add = 0;
-	while (ind_to_add < FS_FILE_MAX_COUNT && !no_file_exists(fs->root_dir[ind_to_add])) {
-		if (has_same_filename(fs->root_dir[ind_to_add], filename)) {
+int find_empty_entry(const char *filename) {
+	int ind = 0;
+	while (ind < FS_FILE_MAX_COUNT && !no_file_exists(fs->root_dir[ind])) {
+		if (has_same_filename(fs->root_dir[ind], filename)) {
 			return -1;
 		}
-		ind_to_add++; 
+		ind++; 
 	}
 
-	if (ind_to_add == FS_FILE_MAX_COUNT) {
+	if (ind == FS_FILE_MAX_COUNT) {
 		return -1;
 	}
+	return ind;
+}
 
-	strncpy(fs->root_dir[ind_to_add].filename, filename, strlen(filename));
-	fs->root_dir[ind_to_add].size = 0;
-	fs->root_dir[ind_to_add].data_index = FAT_EOC;
-	return 0;
+int fs_create(const char *filename)
+{	
+	if(fs == NULL || filename == NULL || strlen(filename) >= FS_FILENAME_LEN || filename_is_invalid(filename)){
+		return -1;
+	}	
+
+	int ind_to_add = find_empty_entry(filename);
+	if(ind_to_add == -1) {
+		return -1;
+	} else {
+		strncpy(fs->root_dir[ind_to_add].filename, filename, strlen(filename));
+		fs->root_dir[ind_to_add].size = 0;
+		fs->root_dir[ind_to_add].data_index = FAT_EOC;
+		return 0;
+	}
+}
+
+int find_entry(const char *filename) {
+	int ind = 0;
+	while (ind < FS_FILE_MAX_COUNT && !has_same_filename(fs->root_dir[ind], filename)) {
+		ind++;
+	}
+
+	if (ind == FS_FILE_MAX_COUNT) {
+		return -1;
+	}
+	
+	return ind;
 }
 
 int fs_delete(const char *filename)
 {
-	if(fs == NULL || filename == NULL || filename[strlen(filename)] != '\0'){
+	if(fs == NULL || filename == NULL || filename_is_invalid(filename)){
 		return -1;
 	}
 	
-	int ind_to_delete = 0;
-	while (ind_to_delete < FS_FILE_MAX_COUNT && !has_same_filename(fs->root_dir[ind_to_delete], filename)) {
-		ind_to_delete++;
-	}
-
-	if (ind_to_delete == FS_FILE_MAX_COUNT) {
+	int ind_to_delete = find_entry(filename);
+	if (ind_to_delete == -1) {
 		return -1;
 	}
 
@@ -273,20 +293,7 @@ int fs_ls(void)
 	return 0;
 }
 
-int fs_open(const char *filename)
-{
-	if(fs == NULL || filename == NULL || filename[strlen(filename)] != '\0'){
-		return -1;
-	}
-
-	int ind_of_file = 0;
-	while(ind_of_file < FS_FILE_MAX_COUNT && !has_same_filename(fs->root_dir[ind_of_file], filename)) {
-		ind_of_file++;
-	}
-	if (ind_of_file == FS_FILE_MAX_COUNT) {
-		return -1;
-	}
-
+int find_empty_entry_in_open_table() {
 	int ind_to_open = 0;
 	while (ind_to_open < FS_OPEN_MAX_COUNT && !open_files[ind_to_open].empty) {
 		ind_to_open++;
@@ -294,7 +301,23 @@ int fs_open(const char *filename)
 	if (ind_to_open == FS_OPEN_MAX_COUNT) {
 		return -1;
 	}
+	return ind_to_open;
+}
 
+int fs_open(const char *filename)
+{
+	if(fs == NULL || filename == NULL || filename_is_invalid(filename)){
+		return -1;
+	}
+
+	if (find_entry(filename) == -1) {
+		return -1;
+	}
+
+	int ind_to_open = find_empty_entry_in_open_table();
+	if (ind_to_open == -1) {
+		return -1;
+	}
 	open_files[ind_to_open].empty = false;
 	open_files[ind_to_open].index_in_rootdir = ind_to_open;
 	open_files[ind_to_open].offset = 0;
