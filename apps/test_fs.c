@@ -86,7 +86,8 @@ void thread_fs_script(void *arg)
 		if (!command)
 			break;
 
-		if (strcmp(command, "MOUNT") == 0) {
+		if (command[0] == '1') {
+			printf("Running mount.");
 			if (fs_mount(diskname))
 				die("Cannot mount disk");
 			else {
@@ -94,7 +95,7 @@ void thread_fs_script(void *arg)
 				mounted = 1;
 			}
 
-		} else if (strcmp(command, "UMOUNT") == 0) {
+		} else if (command[0] == '2') {
 			if (mounted && fs_umount())
 				die("Cannot unmount");
 			else {
@@ -102,9 +103,9 @@ void thread_fs_script(void *arg)
 				mounted = 0;
 			}
 
-		} else if (strcmp(command, "CREATE") == 0) {
-			fs_filename = command_args[1];
-
+		} else if (command[0] == '3') {
+			fs_filename = "test";
+			printf("Creating for filename: %s\n", fs_filename);
 			if(fs_create(fs_filename)) {
 				fs_umount();
 				die("Cannot create file");

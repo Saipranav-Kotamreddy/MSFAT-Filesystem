@@ -3,9 +3,12 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdbool.h>
 
 #include "disk.h"
 #include "fs.h"
+
+#define FAT_EOC -1
 
 struct  __attribute__((__packed__)) superblock{
 	char signature[8];
@@ -46,6 +49,7 @@ struct file_system* fs;
 
 int fs_mount(const char *diskname)
 {
+	printf("Mounting!\n");
 	/* TODO: Phase 1 */
 	if(block_disk_open(diskname)==-1){
 		return -1;
@@ -76,6 +80,7 @@ int fs_mount(const char *diskname)
 		return -1;
 	}*/
 
+	printf("Mounting 2\n");
 	if(block_disk_count()!=total_blocks || (1+fat_size+1+data_count)!=total_blocks){
 		free(fs->superblock);
 		free(fs);
@@ -183,19 +188,58 @@ int fs_info(void)
 	return -1;
 }
 
+bool file_is_empty(struct root_directory entry) {
+	return entry.filename[0] == '\0';
+}
+
+bool has_same_filename(struct root_directory entry, const char *filename) {
+	if (file_is_empty(entry)) {
+		return false;
+	}
+	return strcmp(entry.filename, filename) == 0;
+}
+
 int fs_create(const char *filename)
-{
-	if(filename){
+{	
+	if(fs == NULL || filename == NULL || strlen(filename) >= FS_FILENAME_LEN || filename[strlen(filename)] != '\0'){
 		return -1;
 	}
+
+
+	int ind_to_add = 0;
+	while (ind_to_add < FS_FILE_MAX_COUNT && !file_is_empty(fs->root_dir[ind_to_add])) {
+		if (has_same_filename(fs->root_dir[ind_to_add], filename)) {
+			return -1;
+		}
+		ind_to_add++; 
+	}
+
+	if (ind_to_add == FS_FILE_MAX_COUNT) {
+		return -1;
+	}
+
+	strncpy(fs->root_dir[ind_to_add].filename, filename, strlen(filename));
+	fs->root_dir[ind_to_add].size = 0;
+	fs->root_dir[ind_to_add].data_index = FAT_EOC;
 	return 0;
 }
 
 int fs_delete(const char *filename)
 {
-	if(filename){
+	if(fs == NULL || filename == NULL || filename[strlen(filename)] != '\0'){
 		return -1;
 	}
+	
+	int ind_to_delete = 0;
+	while (ind_to_delete < FS_FILE_MAX_COUNT && !has_same_filename(fs->root_dir[ind_to_delete], filename)) {
+		ind_to_delete++;
+	}
+
+	if (ind_to_delete == FS_FILE_MAX_COUNT) {
+		return -1;
+	}
+
+	fs->root_dir[ind_to_delete].filename[0] = '\0';
 	return 0;
 }
 
