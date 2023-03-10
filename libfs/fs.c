@@ -20,10 +20,11 @@ struct  __attribute__((__packed__)) superblock{
 	uint8_t padding[4079];
 };
 
-
 struct  __attribute__((__packed__)) fat_block{
 	uint16_t fat_array[2048]; 
 };
+
+/* ---------------- Root Directory Data Structure ---------------- */
 
 struct  __attribute__((__packed__)) root_directory{
 	char filename[16];
@@ -31,6 +32,25 @@ struct  __attribute__((__packed__)) root_directory{
 	uint16_t data_index;
 	uint8_t padding[10];
 };
+
+bool no_file_exists(struct root_directory entry) {
+	return entry.filename[0] == '\0';
+}
+
+bool has_same_filename(struct root_directory entry, const char *filename) {
+	if (no_file_exists(entry)) {
+		return false;
+	}
+	return strcmp(entry.filename, filename) == 0;
+}
+
+bool filename_is_invalid(const char *filename) {
+	return filename[strlen(filename)] != '\0';
+}
+
+/* ---------------- File System Data Structure ---------------- */
+
+struct file_system* fs;
 
 struct  __attribute__((__packed__)) data_block{
 	uint8_t data[4096];
@@ -43,6 +63,37 @@ struct  __attribute__((__packed__)) file_system{
 	struct data_block* data_blocks[8192];
 };
 
+
+int fs_find_empty_entry(const char *filename) {
+	int ind = 0;
+	while (ind < FS_FILE_MAX_COUNT && !no_file_exists(fs->root_dir[ind])) {
+		if (has_same_filename(fs->root_dir[ind], filename)) {
+			return -1;
+		}
+		ind++; 
+	}
+
+	if (ind == FS_FILE_MAX_COUNT) {
+		return -1;
+	}
+	return ind;
+}
+
+int fs_find_matching_entry(const char *filename) {
+	int ind = 0;
+	while (ind < FS_FILE_MAX_COUNT && !has_same_filename(fs->root_dir[ind], filename)) {
+		ind++;
+	}
+
+	if (ind == FS_FILE_MAX_COUNT) {
+		return -1;
+	}
+	
+	return ind;
+}
+
+/* ---------------- Open File Table Data Structure ---------------- */
+
 struct  __attribute__((__packed__)) fd_entry{
 	bool empty;
 	int index_in_rootdir;
@@ -51,13 +102,38 @@ struct  __attribute__((__packed__)) fd_entry{
 
 struct fd_entry open_files[FS_OPEN_MAX_COUNT];
 
-/* TODO: Phase 1 */
+bool open_table_has_filename(const char *filename) {
+	for (int i = 0; i < FS_OPEN_MAX_COUNT; i++) {
+		if (open_files[i].empty) {
+			continue;
+		}
+		struct root_directory root_dir_entry = fs->root_dir[open_files[i].index_in_rootdir];
+		if (has_same_filename(root_dir_entry, filename)) {
+			return true;
+		}
+	}
+	return false;
+}
 
-struct file_system* fs;
+int open_table_find_empty_entry() {
+	int ind_to_open = 0;
+	while (ind_to_open < FS_OPEN_MAX_COUNT && !open_files[ind_to_open].empty) {
+		ind_to_open++;
+	}
+	if (ind_to_open == FS_OPEN_MAX_COUNT) {
+		return -1;
+	}
+	return ind_to_open;
+}
+
+bool fd_is_invalid(int fd) {
+	return fd < 0 || fd >= FS_OPEN_MAX_COUNT;
+}
+
+/* ---------------- File System Methods ---------------- */
 
 int fs_mount(const char *diskname)
 {
-	/* TODO: Phase 1 */
 	if(block_disk_open(diskname)==-1){
 		return -1;
 	}
@@ -200,73 +276,31 @@ int fs_info(void)
 	return -1;
 }
 
-bool no_file_exists(struct root_directory entry) {
-	return entry.filename[0] == '\0';
-}
-
-bool has_same_filename(struct root_directory entry, const char *filename) {
-	if (no_file_exists(entry)) {
-		return false;
-	}
-	return strcmp(entry.filename, filename) == 0;
-}
-
-bool filename_is_invalid(const char *filename) {
-	return filename[strlen(filename)] != '\0';
-}
-
-int find_empty_entry(const char *filename) {
-	int ind = 0;
-	while (ind < FS_FILE_MAX_COUNT && !no_file_exists(fs->root_dir[ind])) {
-		if (has_same_filename(fs->root_dir[ind], filename)) {
-			return -1;
-		}
-		ind++; 
-	}
-
-	if (ind == FS_FILE_MAX_COUNT) {
-		return -1;
-	}
-	return ind;
-}
-
 int fs_create(const char *filename)
 {	
 	if(fs == NULL || filename == NULL || strlen(filename) >= FS_FILENAME_LEN || filename_is_invalid(filename)){
 		return -1;
 	}	
 
-	int ind_to_add = find_empty_entry(filename);
+	int ind_to_add = fs_find_empty_entry(filename);
 	if(ind_to_add == -1) {
 		return -1;
 	} else {
 		strncpy(fs->root_dir[ind_to_add].filename, filename, strlen(filename));
+		fs->root_dir[ind_to_add].filename[strlen(filename)] = '\0';
 		fs->root_dir[ind_to_add].size = 0;
 		fs->root_dir[ind_to_add].data_index = FAT_EOC;
 		return 0;
 	}
 }
 
-int find_entry(const char *filename) {
-	int ind = 0;
-	while (ind < FS_FILE_MAX_COUNT && !has_same_filename(fs->root_dir[ind], filename)) {
-		ind++;
-	}
-
-	if (ind == FS_FILE_MAX_COUNT) {
-		return -1;
-	}
-	
-	return ind;
-}
-
 int fs_delete(const char *filename)
 {
-	if(fs == NULL || filename == NULL || filename_is_invalid(filename)){
+	if(fs == NULL || filename == NULL || filename_is_invalid(filename) || open_table_has_filename(filename)){
 		return -1;
 	}
 	
-	int ind_to_delete = find_entry(filename);
+	int ind_to_delete = fs_find_matching_entry(filename);
 	if (ind_to_delete == -1) {
 		return -1;
 	}
@@ -293,39 +327,25 @@ int fs_ls(void)
 	return 0;
 }
 
-int find_empty_entry_in_open_table() {
-	int ind_to_open = 0;
-	while (ind_to_open < FS_OPEN_MAX_COUNT && !open_files[ind_to_open].empty) {
-		ind_to_open++;
-	}
-	if (ind_to_open == FS_OPEN_MAX_COUNT) {
-		return -1;
-	}
-	return ind_to_open;
-}
-
 int fs_open(const char *filename)
 {
 	if(fs == NULL || filename == NULL || filename_is_invalid(filename)){
 		return -1;
 	}
-
-	if (find_entry(filename) == -1) {
+	int index_in_rootdir = fs_find_matching_entry(filename);
+	if (index_in_rootdir == -1) {
 		return -1;
 	}
 
-	int ind_to_open = find_empty_entry_in_open_table();
+	int ind_to_open = open_table_find_empty_entry();
 	if (ind_to_open == -1) {
 		return -1;
 	}
+
 	open_files[ind_to_open].empty = false;
-	open_files[ind_to_open].index_in_rootdir = ind_to_open;
+	open_files[ind_to_open].index_in_rootdir = index_in_rootdir;
 	open_files[ind_to_open].offset = 0;
 	return ind_to_open;
-}
-
-bool fd_is_invalid(int fd) {
-	return fd < 0 || fd >= FS_OPEN_MAX_COUNT;
 }
 
 int fs_close(int fd)
