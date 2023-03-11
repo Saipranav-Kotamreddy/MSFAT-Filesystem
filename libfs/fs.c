@@ -8,7 +8,7 @@
 #include "disk.h"
 #include "fs.h"
 
-#define FAT_EOC -1
+#define FAT_EOC 0xFFFF
 
 struct  __attribute__((__packed__)) superblock{
 	char signature[8];
@@ -143,25 +143,30 @@ int fs_mount(const char *diskname)
 		return -1;
 	}
 	//Insert error checking on disk info here
-	//char* correct_name = "ECS150FS";
-	//char* signature = fs->superblock->signature;
+	char* correct_name = "ECS150FS";
+	char* signature = malloc(9);
+	strcpy(signature, fs->superblock->signature);
+	//strcpy(comparison, signature);
+	signature[8]='\0';
 	uint8_t fat_size = fs->superblock->fat_size;
 	uint16_t root_index = fs->superblock->root_index;
 	uint16_t data_index = fs->superblock->data_index;
 	uint16_t data_count = fs->superblock->data_size;
 	uint16_t total_blocks = fs->superblock->total_blocks;
-	// printf("Signature: %s\n", signature);
-	// printf("FAT count: %d\n", fat_size);
-	// printf("Root index: %d\n", root_index);
-	// printf("Data index: %d\n", data_index);
-	// printf("Data Count: %d\n", data_count);
-	// printf("Total: %d\n", total_blocks);
-	// printf("Compare: %d\n", strcmp(signature, correct_name));
-	/*if(strcmp(signature,"ECS150FS")!=0 || (1+fat_size)!=root_index || (root_index+1)!=data_index){
+	printf("Signature: %s\n", signature);
+	printf("FAT count: %d\n", fat_size);
+	printf("Root index: %d\n", root_index);
+	printf("Data index: %d\n", data_index);
+	printf("Data Count: %d\n", data_count);
+	printf("Total: %d\n", total_blocks);
+	printf("Compare: %d\n", strcmp(signature, correct_name));
+	if(strcmp(signature,"ECS150FS")!=0 || (1+fat_size)!=root_index || (root_index+1)!=data_index){
+		free(signature);
 		free(fs->superblock);
 		free(fs);
 		return -1;
-	}*/
+	}
+	free(signature);
 
 	if(block_disk_count()!=total_blocks || (1+fat_size+1+data_count)!=total_blocks){
 		free(fs->superblock);
@@ -183,6 +188,11 @@ int fs_mount(const char *diskname)
 			free(fs);
 			return -1;
 		}
+	}
+	if(fs->fat[0]->fat_array[0]!=FAT_EOC){
+		free(fs->superblock);
+		free(fs);
+		return -1;
 	}
 
 	if(block_read(root_index, fs->root_dir)==-1){
