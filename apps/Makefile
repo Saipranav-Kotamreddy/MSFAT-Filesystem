@@ -1,9 +1,11 @@
 # Target programs
 programs := \
+			test_fs.x \
 			simple_writer.x \
 			simple_reader.x \
-			test_fs.x
-
+			test_phase2.x \
+			test_phase3_part1.x \
+			test_phase3_part2.x \
 # File-system library
 FSLIB := libfs
 FSPATH := ../$(FSLIB)
