@@ -1,3 +1,6 @@
 MOUNT
-WRITE
+CREATE myfile
+OPEN myfile
+WRITE DATA abcdefghijklmnopqrstuvwxyz
+CLOSE myfile
 UMOUNT
