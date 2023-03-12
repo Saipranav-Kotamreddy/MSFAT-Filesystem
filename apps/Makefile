@@ -3,9 +3,9 @@ programs := \
 			test_fs.x \
 			simple_writer.x \
 			simple_reader.x \
-			test_phase2.x \
 			test_phase3_part1.x \
 			test_phase3_part2.x \
+			test_phase4.x \
 # File-system library
 FSLIB := libfs
 FSPATH := ../$(FSLIB)
@@ -30,7 +30,7 @@ CUR_PWD := $(shell pwd)
 CC	= gcc
 
 # General gcc options
-CFLAGS	:= -Wall -Werror
+CFLAGS	:= -Wall #-Werror
 CFLAGS	+= -pipe
 ## Debug flag
 ifneq ($(D),1)

@@ -130,6 +130,164 @@ bool fd_is_invalid(int fd) {
 	return fd < 0 || fd >= FS_OPEN_MAX_COUNT;
 }
 
+/*
+Get the current data block where offset is at
+Get the index into that current data block
+Initialize an index into buffer 
+While index into buffer < count
+	Get the remaining number of bytes in current data block
+	If remaining size in data block is more or equal to the amount of data left to write
+		Write the rest of the data into that block and leave loop
+	Else
+		Copy over necessary amount of data to write to rest of data block
+		Update necessary indices
+		Get the next data block
+			If we are at the alst data block of the file, then create a new data bock
+				If you cant, break out
+			Return the amount of data that was written 
+
+While index_in_buf < count
+	Remaining size in curr data block = num_bytes_per_data_block - ind_in_curr_data_block
+	if the remaining size in data block >= current_count
+	copy over entire buf at index_in_buf -> index_in_buf+current count to current data block at index_in_curr_data_block -> index_in_curr_data_block + current count
+	index_in_buf = original count (will break out of loop)
+	else 
+	copy over entire buf at index_in_buf -> index_in_buf+size_of_one_datablock to entire datablock 
+
+		set index_in_buf = index_in_buf+size_of_one_datablock
+		
+	set index_in_curr_data_block to 0
+		
+	Current_count -= size of one data block
+		
+	success = create new data block
+		if not success
+			break
+
+*/
+
+
+void get_current_data_block(int fd) {
+	// todo: get rid of magic number
+
+	int offset = open_files[fd].offset;
+	int ind_in_root = open_files[fd].index_in_rootdir;
+	
+	int curr_data_index = fs->root_dir[ind_in_root].data_index;
+	int num_fat_blocks_to_traverse = 1 + (offset / BLOCK_SIZE); 
+	int curr_fat_blocks_traversed = 0;
+	int prev_data_index = -1;
+
+	//printf("Number fat blocks to traverse: %d\n", num_fat_blocks_to_traverse);
+
+	while (curr_fat_blocks_traversed < num_fat_blocks_to_traverse && curr_data_index != FAT_EOC) {
+		curr_fat_blocks_traversed += 1;
+		prev_data_index = curr_data_index;
+		curr_data_index = fs->fat[curr_data_index / 2048]->fat_array[curr_data_index % 2048];
+	}
+
+	//printf("curr fat blocks traversed: %d\n", curr_fat_blocks_traversed);
+
+	int fat_block_ind = 0;
+	int ind_in_fat_block = 0;
+	while (fs->fat[fat_block_ind]->fat_array[ind_in_fat_block] != 0) {
+		ind_in_fat_block += 1;
+		if (ind_in_fat_block == 2048) {
+			fat_block_ind += 1;
+			ind_in_fat_block = 0;
+			if (fat_block_ind == 4) {
+				printf("Not enough space -- GET_CURRENT_DATA_BLOCK\n");
+				exit(1);
+			}
+		}
+	}
+
+	//printf("Fat block index, ind in fat block: %d, %d\n", fat_block_ind, ind_in_fat_block);
+
+	while (curr_fat_blocks_traversed < num_fat_blocks_to_traverse) {
+		int converted_data_index = (fat_block_ind + 1) * ind_in_fat_block;
+		//printf("	Prev data index, curr data index: %d, %d\n", prev_data_index, converted_data_index);
+		if (prev_data_index == -1) {
+			fs->root_dir[ind_in_root].data_index = converted_data_index;
+		} else {
+			fs->fat[prev_data_index / 2048]->fat_array[prev_data_index % 2048] = converted_data_index;
+		}
+		fs->fat[converted_data_index / 2048]->fat_array[converted_data_index % 2048] = FAT_EOC;
+		prev_data_index = converted_data_index;
+		curr_fat_blocks_traversed += 1;
+		ind_in_fat_block += 1;
+		if (ind_in_fat_block == 2048) {
+			fat_block_ind += 1;
+			ind_in_fat_block = 0;
+			if (fat_block_ind == 4) {
+				printf("Not enough space -- GET_CURRENT_DATA_BLOCK\n");
+				exit(1);
+			}
+		}
+	}
+
+	//printf("Prev data index: %d, fs root dir data index: %d\n", prev_data_index, fs->root_dir[ind_in_root].data_index);
+	printf("Fat:\n");
+	for (int i = 0; i < 14; i++) {
+		printf("%d, ", fs->fat[0]->fat_array[i]);
+	}
+	printf("\n");
+	printf("Returns data block at %d\n", prev_data_index);
+	printf("------------------------------------\n");
+	// return fs->data_blocks[prev_data_index];
+}
+
+
+// char* get_current_data_block(int fd) {
+// 	char* buf = malloc(sizeof(char) * BLOCK_SIZE);
+
+// 	int ind_in_root = open_files[fd].index_in_rootdir;
+// 	if (open_files[fd].empty) {
+// 		printf("File %d is empty!\n");
+// 	} else {
+// 		printf("File is not empty, has ind in root of %d\n", ind_in_root);
+// 	}
+// 	int data_ind = fs->root_dir[ind_in_root].data_index;	
+
+// 	int success = block_read(data_ind, buf);
+// 	if (!success) {
+// 		printf("Uh oh couldn't read block %d!\n", data_ind);
+// 	} else {
+// 		printf("Block %d successfully read! \n ", data_ind);
+// 	}
+// 	return buf;
+// }
+
+// int get_index_to_curr_data_block(int fd) {
+// 	return 0;
+// }
+
+int fs_write(int fd, void *buf, size_t count)
+{
+	// char* curr_data_block = get_current_data_block(fd);
+	// int ind_in_curr_data_block = get_index_to_curr_data_block(fd);
+	// int ind_in_buf = 0;
+	// while (ind_in_buf < count) {
+	// 	int rem_size_in_curr_data_block = BLOCK_SIZE - ind_in_curr_data_block;
+	// 	if (rem_size_in_curr_data_block + ind_in_buf >= count) {
+	// 		memcpy(curr_data_block+ind_in_curr_data_block, buf+ind_in_buf, count - ind_in_buf);
+	// 		int success = block_write(65535, curr_data_block);
+	// 		if (!success) {
+	// 			printf("Could not write block !\n");
+	// 		}
+	// 		ind_in_buf = count;
+	// 	} else {
+	// 		printf("Not implemented yet!");
+	// 		break;
+	// 	}
+	// }
+
+	// return ind_in_buf;
+	return 0;
+}
+
+
+
 /* ---------------- File System Methods ---------------- */
 
 int fs_mount(const char *diskname)
@@ -396,13 +554,7 @@ int fs_lseek(int fd, size_t offset)
 	return 0;
 }
 
-int fs_write(int fd, void *buf, size_t count)
-{
-	if(fd || buf || count){
-		return -1;
-	}
-	return 0;
-}
+
 
 int fs_read(int fd, void *buf, size_t count)
 {
