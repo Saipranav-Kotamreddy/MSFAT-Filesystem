@@ -3,6 +3,7 @@ programs := \
 			test_fs.x \
 			simple_writer.x \
 			simple_reader.x \
+			test_reader.x \
 			test_phase2.x \
 			test_phase3_part1.x \
 			test_phase3_part2.x \

@@ -1,6 +1,6 @@
 MOUNT
 CREATE	myfile
 OPEN	myfile
-WRITE	DATA	abcdefghijklmnopqrstuvwxyz
+WRITE	FILE	text.txt
 CLOSE	myfile
 UMOUNT
