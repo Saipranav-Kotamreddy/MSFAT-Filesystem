@@ -33,114 +33,96 @@ do {							\
 
 int main(int argc, char **argv)
 {
-    if (fs_mount("test.fs"))
-        die("Cannot mount disk");
-    //fs_create("file\0");
-    //fs_create("file2\0");
-
-    int fd = fs_open("file\0");
-    if (fd == -1) {
-        printf("Fd is -1 fail!\n");
-        exit(1);
-    }
-    int size = 10;
-    char* buf = malloc(sizeof(char) * size);
-    memset(buf, 'a', size);
-    int res = fs_write(fd, buf, size);
-    if (res != size) {
-        printf("Write failed: %d vs %d\n", res, size);
-        exit(1);
-    }
-    fs_close(fd);
-
-    if (fs_umount())
-        die("Cannot unmount disk");
-
-    /* disk chcks
-    int fd = fs_open("file\0");
-    int size = BLOCK_SIZE*2 + 100;
-    // char* buf = malloc(sizeof(char) * size);
-    // memset(buf, 'a', size);
-    // printf("%d\n", fs_write(fd, buf, size));
-
-    // int res = fs_lseek(fd, BLOCK_SIZE*4 + 100);
-    // printf("Result of lseek: %d\n", res);
-    // printf("%d\n", fs_write(fd, buf, size));
-
-    char* buf = malloc(sizeof(char) * size);
-    memset(buf, 'a', size);
-    printf("%d\n", fs_write(fd, buf, size));
-
-    for (int i = 0; i < BLOCK_SIZE*8 + 24; i++) {
-        int res = fs_lseek(fd, fs_stat(fd));
-        if (res == -1) {
-            printf("Lseek failed %d\n", res);
-            exit(1);
-        }
-    }
     
-    size = BLOCK_SIZE*4+10;
-    buf = malloc(sizeof(char) * size);
-    memset(buf, 'b', size);
-    printf("%d\n", fs_write(fd, buf, size));
-
-    // int res = fs_lseek(fd, BLOCK_SIZE*100 + 2);
-    // printf("Lseek result: %d\n", res);
-    // size = BLOCK_SIZE*2+10;
-    // memset(buf, 'b', size);
-    // printf("%d\n", fs_write(fd, buf, size));
-
-
-    if (fs_umount())
-        die("Cannot unmount disk");*/
-    /*
     if (fs_mount("test.fs"))
         die("Cannot mount disk");
     fs_create("file\0");
     fs_create("file2\0");
 
     int fd = fs_open("file\0");
+    int ret = fs_test(fd);
+    printf("Expected 1: %d\n", ret);
+    printf("----------------------------------\n");
     for (int i = 0; i < BLOCK_SIZE+1; i++)
         fs_lseek(fd, fs_stat(fd));
-    get_current_data_block(fd);
+    ret = fs_test(fd);
+    printf("Expected 2: %d\n", ret);
 
-    
-
-    for (int i = 0; i < BLOCK_SIZE+1; i++)
+    for (int i = 0; i < BLOCK_SIZE*5+1; i++)
         fs_lseek(fd, fs_stat(fd));
-    get_current_data_block(fd);
+    ret = fs_test(fd);
+    printf("Expected 7: %d\n", ret);
 
-    //printf("------------------------------------\n");
+    fs_lseek(fd, BLOCK_SIZE*3 + 100);
+    ret = fs_test(fd);
+    printf("Expected 4: %d\n", ret);
 
+    fs_lseek(fd, BLOCK_SIZE*0 + 100);
+    ret = fs_test(fd);
+    printf("Expected 1: %d\n", ret);
 
-    int fd2 = fs_open("file2\0");
-    for (int i = 0; i < BLOCK_SIZE+1; i++)
-        fs_lseek(fd2, fs_stat(fd2));
-    get_current_data_block(fd2);
-
-    //printf("------------------------------------\n");
-
-    for (int i = 0; i < BLOCK_SIZE+1; i++)
-        fs_lseek(fd, fs_stat(fd));
-    get_current_data_block(fd);
-   // printf("------------------------------------\n");
-    get_current_data_block(fd2);
-    //printf("------------------------------------\n");
+    fs_lseek(fd, BLOCK_SIZE-1);
+    ret = fs_test(fd);
+    printf("Expected 1: %d\n", ret);
 
     fs_lseek(fd, BLOCK_SIZE);
-    get_current_data_block(fd);
-    //printf("------------------------------------\n");
+    ret = fs_test(fd);
+    printf("Expected 2: %d\n", ret);
+    
+    int fd2 = fs_open("file2\0");
+    ret = fs_test(fd2);
+    printf("Expected 8: %d\n", ret);
 
-    for (int i = 0; i < 3*BLOCK_SIZE+1; i++)
+    for (int i = 0; i < BLOCK_SIZE*3+1; i++)
         fs_lseek(fd2, fs_stat(fd2));
-    get_current_data_block(fd2);
 
-    //printf("------------------------------------\n");
-    fs_lseek(fd2, 0);
-    get_current_data_block(fd2);
-    fs_lseek(fd2, BLOCK_SIZE);
-    get_current_data_block(fd2);
-    fs_lseek(fd2, BLOCK_SIZE*2);
-    get_current_data_block(fd2);*/
+    ret = fs_test(fd2);
+    printf("Expected 11: %d\n", ret);
+
+    fs_lseek(fd, fs_stat(fd));
+    ret = fs_test(fd);
+    printf("Expected 7: %d\n", ret);
+
+    for (int i = 0; i < BLOCK_SIZE*1; i++)
+        fs_lseek(fd, fs_stat(fd));
+    ret = fs_test(fd);
+    printf("Expected 12: %d\n", ret);
+
+//     for (int i = 0; i < BLOCK_SIZE+1; i++)
+//         fs_lseek(fd, fs_stat(fd));
+//     fs_write(fd);
+
+//     //printf("------------------------------------\n");
+
+
+//     int fd2 = fs_open("file2\0");
+//     for (int i = 0; i < BLOCK_SIZE+1; i++)
+//         fs_lseek(fd2, fs_stat(fd2));
+//     fs_write(fd2);
+
+//     //printf("------------------------------------\n");
+
+//     for (int i = 0; i < BLOCK_SIZE+1; i++)
+//         fs_lseek(fd, fs_stat(fd));
+//     fs_write(fd);
+//    // printf("------------------------------------\n");
+//     get_current_data_block(fd2);
+//     //printf("------------------------------------\n");
+
+//     fs_lseek(fd, BLOCK_SIZE);
+//     get_current_data_block(fd);
+//     //printf("------------------------------------\n");
+
+//     for (int i = 0; i < 3*BLOCK_SIZE+1; i++)
+//         fs_lseek(fd2, fs_stat(fd2));
+//     get_current_data_block(fd2);
+
+//     //printf("------------------------------------\n");
+//     fs_lseek(fd2, 0);
+//     get_current_data_block(fd2);
+//     fs_lseek(fd2, BLOCK_SIZE);
+//     get_current_data_block(fd2);
+//     fs_lseek(fd2, BLOCK_SIZE*2);
+//     get_current_data_block(fd2);
 	return 0;
 }
