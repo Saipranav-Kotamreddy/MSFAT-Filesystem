@@ -33,7 +33,33 @@ do {							\
 
 int main(int argc, char **argv)
 {
+    if (fs_mount("test.fs"))
+        die("Cannot mount disk");
+    int fd = fs_open("file\0");
+    if (fd == -1) {
+        printf("Fd is -1 fail!\n");
+        exit(1);
+    }
+
+    int size = 10;
+    char* buf = "1234567890";
+    int res = fs_write(fd, buf, size);
+    if (res != size) {
+        printf("Write failed: %d vs %d\n", res, size);
+        exit(1);
+    } else {
+        printf("Write succeeded\n");
+    }
+    fs_close(fd);
+
+    char* buf2 = malloc(sizeof(char) * BLOCK_SIZE);
+    block_read(4, buf2);
+    printf("Expected '97': %d\n", buf2[0]);
+
+    if (fs_umount())
+        die("Cannot unmount disk");
     
+    /* =============== Testing get block at offset =========================
     if (fs_mount("test.fs"))
         die("Cannot mount disk");
     fs_create("file\0");
@@ -87,6 +113,7 @@ int main(int argc, char **argv)
         fs_lseek(fd, fs_stat(fd));
     ret = fs_test(fd);
     printf("Expected 12: %d\n", ret);
+    */
 
 //     for (int i = 0; i < BLOCK_SIZE+1; i++)
 //         fs_lseek(fd, fs_stat(fd));

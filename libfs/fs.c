@@ -142,14 +142,6 @@ void set_fat_at_index(int index, int new_value) {
 	fs->fat[fat_block_ind]->fat_array[ind_in_fat_block] = new_value;
 }
 
-/*
------ find 1st free fat -----
-	x = 0
-	while fat [x] is not 0
-		x += 1
-	if x at end -> throw error 
-	return x
-*/
 int find_first_free_fat() {
 	int index = 1;
 	while (index < 2048 * 4 && get_fat_at_index(index) != 0) {
@@ -170,7 +162,6 @@ int allocate_new_fat() {
 
 int get_next_fat(int index) {
 	int fat_at_index = get_fat_at_index(index);
-	//printf("	at get next fat, have fat at index = %d\n", fat_at_index);
 	if (fat_at_index == FAT_EOC) {
 		int new_fat = allocate_new_fat();
 		set_fat_at_index(index, new_fat);
@@ -185,12 +176,9 @@ int get_block_of_offset(int offset, int index_in_root) {
 		curr_block_index = allocate_new_fat();
 		fs->root_dir[index_in_root].data_index = curr_block_index;
 	}
-	//printf("Curr block index: %d\n", curr_block_index);
 	int num_fat_blocks_to_traverse = 1 + (offset / BLOCK_SIZE); 
-	//printf("Number of fat to traverse: %d\n", num_fat_blocks_to_traverse);
 	for (int i = 0; i < num_fat_blocks_to_traverse - 1; i++) {
 		curr_block_index = get_next_fat(curr_block_index);
-		//printf("Curr block index at i=%d: %d\n", i, curr_block_index);
 	}
 	return curr_block_index;
 }
@@ -201,11 +189,83 @@ int fs_test(int fd)
 	int offset = open_files[fd].offset;
 	int ind_in_root = open_files[fd].index_in_rootdir;
 	//return 0;
-	return get_block_of_offset(offset, ind_in_root);
+	//return get_block_of_offset(offset, ind_in_root);
+}
+
+/*
+	----- fs write ----
+	offset = offset of file fd 
+	X = block index where offset currently at 
+	Y = offset into current block (offset % blocksize)
+	Buf index = 0 
+	size left = count
+
+	while size left > 0
+		size in bounce = blocksize - Y
+		size to write = min of size in bounce, size left
+		bounce = load block at X
+		memcpy bounce + Y, buf + buf index, size to write
+		write bounce to block X
+
+		Y = 0, size left -= size to write, buf index += size to write, 
+		X = get next fat (x)
+	return buf index 
+*/
+
+int convert_to_disk_index(int block_index) {
+	return block_index + fs->superblock->data_index;
+}
+
+int min(int a, int b) {
+	if (a < b) return a;
+	return b;
 }
 
 int fs_write(int fd, void* buf, size_t count) {
-	return 0;
+	/* Variable Initialization */
+	int offset = open_files[fd].offset;
+	int ind_in_root = open_files[fd].index_in_rootdir;
+	int block_index = get_block_of_offset(offset, ind_in_root);
+	int offset_in_current_block = offset % BLOCK_SIZE;
+	int buf_index = 0;
+	int size_left = count;
+
+	while (size_left > 0) {
+		printf("------------------- \n");
+		printf("Size left: %d\n", size_left);
+		char* bounce_buffer = malloc(sizeof(char) * BLOCK_SIZE);
+		block_read(convert_to_disk_index(block_index), bounce_buffer);
+		printf("Read block at %d\n", convert_to_disk_index(block_index));
+
+
+		int size_in_bounce_buffer = BLOCK_SIZE - offset_in_current_block;
+		int size_to_write = min(size_in_bounce_buffer, size_left);
+		memcpy(bounce_buffer + offset_in_current_block, buf + buf_index, size_to_write);
+		printf("Wrote bounce buffer  (%d -> %d) from buf (%d -> %d)\n", offset_in_current_block, offset_in_current_block + size_to_write, buf_index, buf_index + size_to_write);
+
+		block_write(convert_to_disk_index(block_index), bounce_buffer);
+		printf("Write block at %d\n", convert_to_disk_index(block_index));
+		//fs_lseek(fd, size_to_write);
+
+		offset_in_current_block = 0;
+		size_left -= size_to_write;
+		buf_index += size_to_write;
+		// Todo: dont want to recreate fat if size left is 0
+		block_index = get_next_fat(block_index);
+		printf("------------------- \n");
+	}
+
+	//fs->root_dir[ind_in_root].size += count - size_left;
+	int am_written = count - size_left;
+	open_files[fd].offset += am_written;
+	if (open_files[fd].offset > fs->root_dir[ind_in_root].size) {
+		fs->root_dir[ind_in_root].size = open_files[fd].offset;
+	}
+	// printf("Reading root directory\n");
+	// printf("Data index: %d\n", fs->root_dir[ind_in_root].data_index);
+	// printf("Size: %d\n", fs->root_dir[ind_in_root].size);
+	// printf("name: %s\n", fs->root_dir[ind_in_root].filename);
+	return am_written;
 }
 
 /*
@@ -234,23 +294,7 @@ int fs_write(int fd, void* buf, size_t count) {
 		x = get next fat (x)
 	return x
 
-	----- fs write ----
-	offset = offset of file fd 
-	X = block index where offset currently at 
-	Y = offset into current block (offset % blocksize)
-	Buf index = 0 
-	size left = count
-
-	while size left > 0
-		size in bounce = blocksize - Y
-		size to write = min of size in bounce, size left
-		bounce = load block at X
-		memcpy bounce + Y, buf + buf index, size to write
-		write bounce to block X
-
-		Y = 0, size left -= size to write, buf index += size to write, 
-		X = get next fat (x)
-	return buf index 
+	
 */
 
 
@@ -364,8 +408,10 @@ int fs_umount(void)
 	uint16_t data_index = fs->superblock->data_index;
 	/* TODO: Phase 1 */
 	uint8_t fat_size = fs->superblock->fat_size;
+	printf("In umount, fat size: %d\n", fat_size);
 	uint16_t data_count = fs->superblock->data_size;
 	for(int i=0; i<fat_size; i++){
+		printf("In umount, writing to %d\n", i+1);
 		if(block_write(i+1, fs->fat[i])==-1){
 			printf("Block write failed --FS UMOUNT\n");
 			exit(1);
@@ -386,6 +432,7 @@ int fs_umount(void)
 	}
 
 	uint16_t root_index = fs->superblock->root_index;
+	printf("In umount, writing to %d\n", root_index);
 	if(block_write(root_index, fs->root_dir)==-1){
 		printf("Problem with writing root\n");
 		exit(1);
