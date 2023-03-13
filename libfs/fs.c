@@ -305,26 +305,26 @@ int fs_write(int fd, void *buf, size_t count)
 	/*
 		---- checking at disk level ----
 	*/
-	curr_data_block_index = first_data_block_index;
-	while (curr_data_block_index != FAT_EOC) {
-		printf("Checking data block index at %d, real index %d\n", curr_data_block_index, fs->superblock->data_index + curr_data_block_index);
-		char* read_val = malloc(sizeof(char) * BLOCK_SIZE);
-		int res = block_read(fs->superblock->data_index + curr_data_block_index, read_val);
-		if (res != 0) {
-			printf("Problem with read: %d\n", res);
-			exit(1);
-		}
-		for (int i = 0; i < BLOCK_SIZE; i++) {
-			if ((int) read_val[i] != fs->data_blocks[curr_data_block_index]->data[i]) {
-				printf("Difference in %d: %d vs %d\n", i, read_val[i], fs->data_blocks[curr_data_block_index]->data[i]);
-				exit(1);
-			}
-		}
-		int fat_ind = curr_data_block_index / 2048;
-		int ind_in_fat = curr_data_block_index % BLOCK_SIZE;
-		curr_data_block_index = fs->fat[fat_ind]->fat_array[ind_in_fat];
-	}
-	printf("Success!\n");
+	// curr_data_block_index = first_data_block_index;
+	// while (curr_data_block_index != FAT_EOC) {
+	// 	printf("Checking data block index at %d, real index %d\n", curr_data_block_index, fs->superblock->data_index + curr_data_block_index);
+	// 	char* read_val = malloc(sizeof(char) * BLOCK_SIZE);
+	// 	int res = block_read(fs->superblock->data_index + curr_data_block_index, read_val);
+	// 	if (res != 0) {
+	// 		printf("Problem with read: %d\n", res);
+	// 		exit(1);
+	// 	}
+	// 	for (int i = 0; i < BLOCK_SIZE; i++) {
+	// 		if ((int) read_val[i] != fs->data_blocks[curr_data_block_index]->data[i]) {
+	// 			printf("Difference in %d: %d vs %d\n", i, read_val[i], fs->data_blocks[curr_data_block_index]->data[i]);
+	// 			exit(1);
+	// 		}
+	// 	}
+	// 	int fat_ind = curr_data_block_index / 2048;
+	// 	int ind_in_fat = curr_data_block_index % BLOCK_SIZE;
+	// 	curr_data_block_index = fs->fat[fat_ind]->fat_array[ind_in_fat];
+	// }
+	// printf("Success!\n");
 
 	/* ---- checking at ram level -----
 	int check_index_in_buf = 0;
@@ -510,15 +510,36 @@ int fs_mount(const char *diskname)
 
 int fs_umount(void)
 {
+	uint16_t data_index = fs->superblock->data_index;
 	/* TODO: Phase 1 */
 	uint8_t fat_size = fs->superblock->fat_size;
 	uint16_t data_count = fs->superblock->data_size;
 	for(int i=0; i<fat_size; i++){
+		if(block_write(i+1, fs->fat[i])==-1){
+			printf("Block write failed --FS UMOUNT\n");
+			exit(1);
+		}
 		free(fs->fat[i]);
 	}
-	for(int j=0; j<data_count; j++){
-		free(fs->data_blocks[j]);
+	// for(int j=0; j<data_count; j++){
+	// 	free(fs->data_blocks[j]);
+	// }
+
+	for(int i=0; i<data_count; i++){
+		// if(block_write(data_index+i,fs->data_blocks[i])==-1){
+		// 	printf("Block write failed for data blocks --FS UMOUNT\n");
+		// 	exit(1);
+		// 	//return -1;
+		// }
+		free(fs->data_blocks[i]);
 	}
+
+	uint16_t root_index = fs->superblock->root_index;
+	if(block_write(root_index, fs->root_dir)==-1){
+		printf("Problem with writing root\n");
+		exit(1);
+	}
+
 	//free(fs->data_blocks);
 	//free(fs->fat);
 	free(fs->superblock);

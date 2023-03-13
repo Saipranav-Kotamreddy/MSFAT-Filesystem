@@ -35,11 +35,30 @@ int main(int argc, char **argv)
 {
     if (fs_mount("test.fs"))
         die("Cannot mount disk");
-    fs_create("file\0");
-    fs_create("file2\0");
+    //fs_create("file\0");
+    //fs_create("file2\0");
 
     int fd = fs_open("file\0");
-    int size = BLOCK_SIZE*9 + 100;
+    if (fd == -1) {
+        printf("Fd is -1 fail!\n");
+        exit(1);
+    }
+    int size = 10;
+    char* buf = malloc(sizeof(char) * size);
+    memset(buf, 'a', size);
+    int res = fs_write(fd, buf, size);
+    if (res != size) {
+        printf("Write failed: %d vs %d\n", res, size);
+        exit(1);
+    }
+    fs_close(fd);
+
+    if (fs_umount())
+        die("Cannot unmount disk");
+
+    /* disk chcks
+    int fd = fs_open("file\0");
+    int size = BLOCK_SIZE*2 + 100;
     // char* buf = malloc(sizeof(char) * size);
     // memset(buf, 'a', size);
     // printf("%d\n", fs_write(fd, buf, size));
@@ -52,13 +71,28 @@ int main(int argc, char **argv)
     memset(buf, 'a', size);
     printf("%d\n", fs_write(fd, buf, size));
 
-    fs_lseek(fd, BLOCK_SIZE*4 + 24);
-    size = BLOCK_SIZE*8+10;
+    for (int i = 0; i < BLOCK_SIZE*8 + 24; i++) {
+        int res = fs_lseek(fd, fs_stat(fd));
+        if (res == -1) {
+            printf("Lseek failed %d\n", res);
+            exit(1);
+        }
+    }
+    
+    size = BLOCK_SIZE*4+10;
+    buf = malloc(sizeof(char) * size);
     memset(buf, 'b', size);
     printf("%d\n", fs_write(fd, buf, size));
 
+    // int res = fs_lseek(fd, BLOCK_SIZE*100 + 2);
+    // printf("Lseek result: %d\n", res);
+    // size = BLOCK_SIZE*2+10;
+    // memset(buf, 'b', size);
+    // printf("%d\n", fs_write(fd, buf, size));
+
+
     if (fs_umount())
-        die("Cannot unmount disk");
+        die("Cannot unmount disk");*/
     /*
     if (fs_mount("test.fs"))
         die("Cannot mount disk");
