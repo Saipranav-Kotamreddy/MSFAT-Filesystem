@@ -39,6 +39,33 @@ int main(int argc, char **argv)
     fs_create("file2\0");
 
     int fd = fs_open("file\0");
+    int size = BLOCK_SIZE*9 + 100;
+    // char* buf = malloc(sizeof(char) * size);
+    // memset(buf, 'a', size);
+    // printf("%d\n", fs_write(fd, buf, size));
+
+    // int res = fs_lseek(fd, BLOCK_SIZE*4 + 100);
+    // printf("Result of lseek: %d\n", res);
+    // printf("%d\n", fs_write(fd, buf, size));
+
+    char* buf = malloc(sizeof(char) * size);
+    memset(buf, 'a', size);
+    printf("%d\n", fs_write(fd, buf, size));
+
+    fs_lseek(fd, BLOCK_SIZE*4 + 24);
+    size = BLOCK_SIZE*8+10;
+    memset(buf, 'b', size);
+    printf("%d\n", fs_write(fd, buf, size));
+
+    if (fs_umount())
+        die("Cannot unmount disk");
+    /*
+    if (fs_mount("test.fs"))
+        die("Cannot mount disk");
+    fs_create("file\0");
+    fs_create("file2\0");
+
+    int fd = fs_open("file\0");
     for (int i = 0; i < BLOCK_SIZE+1; i++)
         fs_lseek(fd, fs_stat(fd));
     get_current_data_block(fd);
@@ -80,13 +107,6 @@ int main(int argc, char **argv)
     fs_lseek(fd2, BLOCK_SIZE);
     get_current_data_block(fd2);
     fs_lseek(fd2, BLOCK_SIZE*2);
-    get_current_data_block(fd2);
-
-    // for (int i = 0; i < BLOCK_SIZE+1; i++)
-    //     fs_lseek(fd, fs_stat(fd2));
-    // for (int i = 0; i < BLOCK_SIZE+1; i++)
-    //     fs_lseek(fd, fs_stat(fd));
-    // get_current_data_block(fd2);
-    // get_current_data_block(fd);
+    get_current_data_block(fd2);*/
 	return 0;
 }
