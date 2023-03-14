@@ -35,6 +35,69 @@ int main(int argc, char **argv)
 {
     if (fs_mount("test.fs"))
         die("Cannot mount disk");
+    
+    int sizes[] = {1368, 9034, 19000};
+    char* filenames[] = {"test_file1.txt", "test_file2.txt", "test_file3.txt"};
+    char* file_names_on_virtual_disk[] = {"file", "file2", "file3"};
+
+    for (int i = 0; i < 3; i++) {
+        char buf[sizes[i]];
+        int file_fd = open(filenames[i], O_RDONLY);
+        if (file_fd < 0) {
+            printf("File Fd is -1 fail!\n");
+            exit(1);
+        }
+        int ret = read(file_fd, buf, sizes[i]);
+        if (ret == -1) {
+            printf("Read failed! - %d\n", ret);
+            exit(1);
+        }
+        int fd = fs_open(file_names_on_virtual_disk[i]);
+        if (fd == -1) {
+            printf("Fd is -1 fail!\n");
+            exit(1);
+        }
+        int res = fs_write(fd, buf, sizes[i]);
+        if (res != sizes[i]) {
+            printf("Write failed: %d vs %d\n", res, sizes[i]);
+            exit(1);
+        } else {
+            printf("Write succeeded\n");
+        }
+        fs_close(fd);
+    }
+
+
+    // int size = 9000;
+    // char* filename = "test_file2.txt";
+    // char buf[size];
+    // int file_fd = open(filename, O_RDONLY);
+    // int ret = read(file_fd, buf, size);
+    // if (ret == -1) {
+    //     printf("Read failed! - %d\n", ret);
+    //     exit(1);
+    // }
+
+    // int fd = fs_open("file\0");
+    // if (fd == -1) {
+    //     printf("Fd is -1 fail!\n");
+    //     exit(1);
+    // }
+    // int res = fs_write(fd, buf, size);
+    // if (res != size) {
+    //     printf("Write failed: %d vs %d\n", res, size);
+    //     exit(1);
+    // } else {
+    //     printf("Write succeeded\n");
+    // }
+    // fs_close(fd);
+
+    if (fs_umount())
+        die("Cannot unmount disk");
+    
+    /*  --- Simple tests for write ---
+    if (fs_mount("test.fs"))
+        die("Cannot mount disk");
     int fd = fs_open("file\0");
     if (fd == -1) {
         printf("Fd is -1 fail!\n");
@@ -58,7 +121,8 @@ int main(int argc, char **argv)
 
     if (fs_umount())
         die("Cannot unmount disk");
-    
+    */
+
     /* =============== Testing get block at offset =========================
     if (fs_mount("test.fs"))
         die("Cannot mount disk");
