@@ -64,6 +64,13 @@ int main(int argc, char **argv)
         } else {
             printf("Write succeeded\n");
         }
+
+        int file_size = fs_stat(fd);
+        if (file_size != sizes[i]) {
+            printf("Mismatched file size: Expected %d, Got %d\n", sizes[i], file_size);
+            exit(1);
+        }
+
         fs_close(fd);
     }
 

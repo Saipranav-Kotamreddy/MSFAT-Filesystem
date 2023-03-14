@@ -225,46 +225,35 @@ int fs_write(int fd, void* buf, size_t count) {
 	/* Variable Initialization */
 	int offset = open_files[fd].offset;
 	int ind_in_root = open_files[fd].index_in_rootdir;
-	int block_index = get_block_of_offset(offset, ind_in_root);
-	int offset_in_current_block = offset % BLOCK_SIZE;
 	int buf_index = 0;
 	int size_left = count;
+	int block_index, offset_in_current_block;
 
 	while (size_left > 0) {
-		printf("------------------- \n");
-		printf("Size left: %d\n", size_left);
+		if (buf_index == 0) {
+			block_index = get_block_of_offset(offset, ind_in_root);
+			offset_in_current_block = offset % BLOCK_SIZE;
+		} else {
+			block_index = get_next_fat(block_index);
+			offset_in_current_block = 0;
+		}
+
 		char* bounce_buffer = malloc(sizeof(char) * BLOCK_SIZE);
 		block_read(convert_to_disk_index(block_index), bounce_buffer);
-		printf("Read block at %d\n", convert_to_disk_index(block_index));
-
-
 		int size_in_bounce_buffer = BLOCK_SIZE - offset_in_current_block;
 		int size_to_write = min(size_in_bounce_buffer, size_left);
 		memcpy(bounce_buffer + offset_in_current_block, buf + buf_index, size_to_write);
-		printf("Wrote bounce buffer  (%d -> %d) from buf (%d -> %d)\n", offset_in_current_block, offset_in_current_block + size_to_write, buf_index, buf_index + size_to_write);
-
 		block_write(convert_to_disk_index(block_index), bounce_buffer);
-		printf("Write block at %d\n", convert_to_disk_index(block_index));
-		//fs_lseek(fd, size_to_write);
 
-		offset_in_current_block = 0;
 		size_left -= size_to_write;
-		buf_index += size_to_write;
-		// Todo: dont want to recreate fat if size left is 0
-		block_index = get_next_fat(block_index);
-		printf("------------------- \n");
+		buf_index += size_to_write;	
 	}
 
-	//fs->root_dir[ind_in_root].size += count - size_left;
 	int am_written = count - size_left;
 	open_files[fd].offset += am_written;
 	if (open_files[fd].offset > fs->root_dir[ind_in_root].size) {
 		fs->root_dir[ind_in_root].size = open_files[fd].offset;
 	}
-	// printf("Reading root directory\n");
-	// printf("Data index: %d\n", fs->root_dir[ind_in_root].data_index);
-	// printf("Size: %d\n", fs->root_dir[ind_in_root].size);
-	// printf("name: %s\n", fs->root_dir[ind_in_root].filename);
 	return am_written;
 }
 
