@@ -97,10 +97,21 @@ int main(int argc, char **argv)
 
     int file_size = fs_stat(fd);
     assert(file_size == 4096);
-    
+
     fs_close(fd);
 
+    fs_create("file4\0");
+    fd = fs_open("file4\0");
+    if (fd == -1) {
+        printf("Fd is -1 fail!\n");
+        exit(1);
+    }
+    res = fs_write(fd, buf, 10);
+    assert(res == 0);
+    file_size = fs_stat(fd);
+    assert(file_size == 0);
 
+    printf("------------------------------- Error test successful! ----------------");
     // int size = 9000;
     // char* filename = "test_file2.txt";
     // char buf[size];
