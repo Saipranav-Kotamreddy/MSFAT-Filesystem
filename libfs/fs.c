@@ -144,18 +144,22 @@ void set_fat_at_index(int index, int new_value) {
 
 int find_first_free_fat() {
 	int index = 1;
-	while (index < 2048 * 4 && get_fat_at_index(index) != 0) {
+	while (index < fs->superblock->data_size && get_fat_at_index(index) != 0) {
 		index++;
 	}
-	if (index == 2048*4) {
+	if (index == fs->superblock->data_size) {
 		printf("No free FATs available --find_first_free_fat()\n");
-		exit(1);
+		// exit(1);
+		return -1;
 	}
 	return index;
 }
 
 int allocate_new_fat() {
 	int new_fat = find_first_free_fat();
+	if (new_fat == -1) {
+		return -1;
+	}
 	set_fat_at_index(new_fat, FAT_EOC);
 	return new_fat;
 }
@@ -164,6 +168,9 @@ int get_next_fat(int index) {
 	int fat_at_index = get_fat_at_index(index);
 	if (fat_at_index == FAT_EOC) {
 		int new_fat = allocate_new_fat();
+		if (new_fat == -1) {
+			return -1;
+		}
 		set_fat_at_index(index, new_fat);
 		return new_fat;
 	}
@@ -174,10 +181,14 @@ int get_block_of_offset(int offset, int index_in_root) {
 	int curr_block_index = fs->root_dir[index_in_root].data_index;
 	if (curr_block_index == FAT_EOC) {
 		curr_block_index = allocate_new_fat();
+		if (curr_block_index == -1) {
+			return -1;
+		}
 		fs->root_dir[index_in_root].data_index = curr_block_index;
 	}
 	int num_fat_blocks_to_traverse = 1 + (offset / BLOCK_SIZE); 
 	for (int i = 0; i < num_fat_blocks_to_traverse - 1; i++) {
+		// Todo: do we need to handle this case where the file offset is moved too far past size of disk?
 		curr_block_index = get_next_fat(curr_block_index);
 	}
 	return curr_block_index;
@@ -236,6 +247,10 @@ int fs_write(int fd, void* buf, size_t count) {
 		} else {
 			block_index = get_next_fat(block_index);
 			offset_in_current_block = 0;
+		}
+
+		if (block_index == -1) {
+			break;
 		}
 
 		char* bounce_buffer = malloc(sizeof(char) * BLOCK_SIZE);
