@@ -111,6 +111,8 @@ int main(int argc, char **argv)
     file_size = fs_stat(fd);
     assert(file_size == 0);
 
+    fs_close(fd);
+
     printf("------------------------------- Error test successful! ----------------");
     // int size = 9000;
     // char* filename = "test_file2.txt";

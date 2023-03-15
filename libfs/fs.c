@@ -67,9 +67,6 @@ struct  __attribute__((__packed__)) file_system{
 int fs_find_empty_entry(const char *filename) {
 	int ind = 0;
 	while (ind < FS_FILE_MAX_COUNT && !no_file_exists(fs->root_dir[ind])) {
-		if (has_same_filename(fs->root_dir[ind], filename)) {
-			return -1;
-		}
 		ind++; 
 	}
 
@@ -130,6 +127,18 @@ bool fd_is_invalid(int fd) {
 	return fd < 0 || fd >= FS_OPEN_MAX_COUNT;
 }
 
+bool open_table_all_files_closed() {
+	int ind_to_open = 0;
+	while (ind_to_open < FS_OPEN_MAX_COUNT) {
+		if (!open_files[ind_to_open].empty) {
+			return false;
+		}
+		ind_to_open++;
+	}
+	return true;
+}
+
+
 uint16_t get_fat_at_index(int index) {
 	int fat_block_ind = index / 2048;
 	int ind_in_fat_block = index % 4096;
@@ -148,8 +157,6 @@ int find_first_free_fat() {
 		index++;
 	}
 	if (index == fs->superblock->data_size) {
-		printf("No free FATs available --find_first_free_fat()\n");
-		// exit(1);
 		return -1;
 	}
 	return index;
@@ -203,25 +210,6 @@ int fs_test(int fd)
 	//return get_block_of_offset(offset, ind_in_root);
 }
 
-/*
-	----- fs write ----
-	offset = offset of file fd 
-	X = block index where offset currently at 
-	Y = offset into current block (offset % blocksize)
-	Buf index = 0 
-	size left = count
-
-	while size left > 0
-		size in bounce = blocksize - Y
-		size to write = min of size in bounce, size left
-		bounce = load block at X
-		memcpy bounce + Y, buf + buf index, size to write
-		write bounce to block X
-
-		Y = 0, size left -= size to write, buf index += size to write, 
-		X = get next fat (x)
-	return buf index 
-*/
 
 int convert_to_disk_index(int block_index) {
 	return block_index + fs->superblock->data_index;
@@ -271,39 +259,6 @@ int fs_write(int fd, void* buf, size_t count) {
 	}
 	return am_written;
 }
-
-/*
-	----- find 1st free fat -----
-	x = 0
-	while fat [x] is not 0
-		x += 1
-	if x at end -> throw error 
-	return x
-
-	----- get next fat (x) -----
-	if fat[x] is eoc
-		z = find 1st free fat 
-		fat[x] = z
-		return z
-	return fat[x]
-
-	----- get block where offset is at (offset) -----
-	X = get data index stored in root directory
-	if X = eoc
-		z = find 1st free fat
-		set root directory to z
-		x = z
-	N = number of fats to traverse
-	for i = 0 -> N-1 
-		x = get next fat (x)
-	return x
-
-	
-*/
-
-
-
-
 
 /* ---------------- File System Methods ---------------- */
 
@@ -409,44 +364,34 @@ int fs_mount(const char *diskname)
 
 int fs_umount(void)
 {
+	if (fs == NULL || !open_table_all_files_closed()) {
+		return -1;
+	}
+
 	uint16_t data_index = fs->superblock->data_index;
 	/* TODO: Phase 1 */
 	uint8_t fat_size = fs->superblock->fat_size;
-	printf("In umount, fat size: %d\n", fat_size);
 	uint16_t data_count = fs->superblock->data_size;
 	for(int i=0; i<fat_size; i++){
-		printf("In umount, writing to %d\n", i+1);
 		if(block_write(i+1, fs->fat[i])==-1){
 			printf("Block write failed --FS UMOUNT\n");
 			exit(1);
 		}
 		free(fs->fat[i]);
 	}
-	// for(int j=0; j<data_count; j++){
-	// 	free(fs->data_blocks[j]);
-	// }
 
 	for(int i=0; i<data_count; i++){
-		// if(block_write(data_index+i,fs->data_blocks[i])==-1){
-		// 	printf("Block write failed for data blocks --FS UMOUNT\n");
-		// 	exit(1);
-		// 	//return -1;
-		// }
 		free(fs->data_blocks[i]);
 	}
 
 	uint16_t root_index = fs->superblock->root_index;
-	printf("In umount, writing to %d\n", root_index);
 	if(block_write(root_index, fs->root_dir)==-1){
 		printf("Problem with writing root\n");
 		exit(1);
 	}
 
-	//free(fs->data_blocks);
-	//free(fs->fat);
 	free(fs->superblock);
 	free(fs);
-	//Add check for open file descriptors
 	if(block_disk_close()==-1){
 		return -1;
 	}
@@ -487,7 +432,7 @@ int fs_info(void)
 
 int fs_create(const char *filename)
 {	
-	if(fs == NULL || filename == NULL || strlen(filename) >= FS_FILENAME_LEN || filename_is_invalid(filename)){
+	if(fs == NULL || filename == NULL || strlen(filename) >= FS_FILENAME_LEN || filename_is_invalid(filename) || fs_find_matching_entry(filename) != -1){
 		return -1;
 	}	
 
