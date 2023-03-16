@@ -468,6 +468,7 @@ int fs_info(void)
 
 int fs_create(const char *filename)
 {	
+
 	if(fs == NULL || filename == NULL || strlen(filename) >= FS_FILENAME_LEN || filename_is_invalid(filename) || fs_find_matching_entry(filename) != -1){
 		return -1;
 	}	
