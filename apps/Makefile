@@ -10,6 +10,7 @@ programs := \
 			test_phase1.x \
 			test_phase2_part1.x \
 			test_phase2_part2.x \
+			test_phase4_read.x
 # File-system library
 FSLIB := libfs
 FSPATH := ../$(FSLIB)

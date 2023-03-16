@@ -11,7 +11,7 @@ echo -e "MOUNT\nCREATE\tfile\nCREATE\tfile2\nCREATE\tfile3\nUMOUNT\n" > somethin
 if [ $? != 0 ]
 then
     echo "Phase 4 error test failed"
-    exit
+    exit 1
 fi
 
 echo "Testing read:"
@@ -20,7 +20,7 @@ echo -e "MOUNT\nOPEN\tfile\nREAD\t1368\tFILE\ttest_file1.txt\nCLOSE\nUMOUNT\n" >
 if [ $? != 0 ]
 then
     echo "Phase 4 error test failed"
-    exit
+    exit 1
 fi
 
 
@@ -29,7 +29,7 @@ echo -e "MOUNT\nOPEN\tfile2\nREAD\t9034\tFILE\ttest_file2.txt\nCLOSE\nUMOUNT\n" 
 if [ $? != 0 ]
 then
     echo "Phase 4 error test failed"
-    exit
+    exit 1
 fi
 
 
@@ -38,7 +38,7 @@ echo -e "MOUNT\nOPEN\tfile3\nREAD\t19000\tFILE\ttest_file3.txt\nCLOSE\nUMOUNT\n"
 if [ $? != 0 ]
 then
     echo "Phase 4 error test failed"
-    exit
+    exit 1
 fi
 
 echo "Phase 4 tests successful!"

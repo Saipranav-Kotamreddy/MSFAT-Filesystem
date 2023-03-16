@@ -6,7 +6,7 @@ dd if=/dev/urandom of=test_file bs=4096 count=1 &> /dev/null
 if [ $? != 0 ]
 then
     echo "Phase 1 failed"
-    exit
+    exit 1
 fi
 
 dd if=/dev/urandom of=test_file bs=4096 count=1 &> /dev/null
@@ -15,7 +15,7 @@ dd if=/dev/urandom of=test_file bs=4096 count=1 &> /dev/null
 if [ $? != 0 ]
 then
     echo "Phase 2 part 1 failed"
-    exit
+    exit 1
 fi
 
 dd if=/dev/urandom of=test_file bs=4096 count=1 &> /dev/null
@@ -24,7 +24,7 @@ dd if=/dev/urandom of=test_file bs=4096 count=1 &> /dev/null
 if [ $? != 0 ]
 then
     echo "Phase 2 part 2 failed"
-    exit
+    exit 1
 fi
 
 
@@ -35,7 +35,7 @@ dd if=/dev/urandom of=test_file bs=4096 count=1 &> /dev/null
 if [ $? != 0 ]
 then
     echo "Phase 3 part 1 failed"
-    exit
+    exit 1
 fi
 
 dd if=/dev/urandom of=test_file bs=4096 count=1 &> /dev/null
@@ -45,7 +45,7 @@ dd if=/dev/urandom of=test_file bs=4096 count=1 &> /dev/null
 if [ $? != 0 ]
 then
     echo "Phase 3 part 2 failed"
-    exit
+    exit 1
 fi
 
 echo "All phases succeeded!"
