@@ -46,6 +46,7 @@ ADD "https://www.random.org/cgi-bin/randbyte?nbytes=10&format=h" skipcache
 RUN ./unit_tests.sh
 RUN ./e2e_test1.sh
 RUN ./e2e_test2.sh
+RUN ./e2e_test3.sh
 # RUN cd apps ; dd if=/dev/urandom of=test_file bs=4096 count=1 ; ./fs_make.x test_ls.fs 100 ; ./fs_make.x test_ls2.fs 100 
 # RUN cd apps ; echo "MOUNT\nCREATE\tfile\nCREATE\tfile2\n" > something.script ; ./fs_ref.x script test_ls.fs something.script > ref_output ; ./test_fs.x script test_ls2.fs something.script > output ; diff ref_output output > sizeofidff ;  wc -l sizeofidff
 

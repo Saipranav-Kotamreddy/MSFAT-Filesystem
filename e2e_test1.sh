@@ -10,6 +10,17 @@ DIFF=$(diff given_output ref_output)
 if [ "$DIFF" != "" ]
 then
     echo "Fails: $DIFF"
+    exit 1
+else
+    echo "Success!"
+fi
+./test_fs.x ls disk_for_our_fs.fs > ls_given_output
+./fs_ref.x ls disk_for_our_fs.fs > ls_ref_output
+DIFF=$(diff ls_given_output ls_ref_output) 
+if [ "$DIFF" != "" ]
+then
+    echo "Fails: $DIFF"
+    exit 1
 else
     echo "Success!"
 fi

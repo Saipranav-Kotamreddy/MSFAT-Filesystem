@@ -64,7 +64,7 @@ struct  __attribute__((__packed__)) file_system{
 };
 
 
-int fs_find_empty_entry(const char *filename) {
+int fs_find_empty_entry() {
 	int ind = 0;
 	while (ind < FS_FILE_MAX_COUNT && !no_file_exists(fs->root_dir[ind])) {
 		ind++; 
@@ -201,16 +201,6 @@ int get_block_of_offset(int offset, int index_in_root) {
 	return curr_block_index;
 }
 
-// need to update offset too! 
-int fs_test(int fd)
-{
-	int offset = open_files[fd].offset;
-	int ind_in_root = open_files[fd].index_in_rootdir;
-	//return 0;
-	//return get_block_of_offset(offset, ind_in_root);
-}
-
-
 int convert_to_disk_index(int block_index) {
 	return block_index + fs->superblock->data_index;
 }
@@ -304,7 +294,7 @@ int fs_write(int fd, void* buf, size_t count) {
 
 	int am_written = count - size_left;
 	open_files[fd].offset += am_written;
-	if (open_files[fd].offset > fs->root_dir[ind_in_root].size) {
+	if (open_files[fd].offset > (int) fs->root_dir[ind_in_root].size) {
 		fs->root_dir[ind_in_root].size = open_files[fd].offset;
 	}
 	return am_written;
@@ -406,8 +396,6 @@ int fs_umount(void)
 		return -1;
 	}
 
-	uint16_t data_index = fs->superblock->data_index;
-	/* TODO: Phase 1 */
 	uint8_t fat_size = fs->superblock->fat_size;
 	uint16_t data_count = fs->superblock->data_size;
 	for(int i=0; i<fat_size; i++){
@@ -478,7 +466,7 @@ int fs_create(const char *filename)
 		return -1;
 	}	
 
-	int ind_to_add = fs_find_empty_entry(filename);
+	int ind_to_add = fs_find_empty_entry();
 	if(ind_to_add == -1) {
 		return -1;
 	} else {

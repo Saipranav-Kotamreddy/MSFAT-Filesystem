@@ -1,7 +1,7 @@
 # Target library
 lib := libfs.a
 objs := fs.o disk.o
-CFLAGS := -Wall -Wextra -MMD #-Werror -MMD
+CFLAGS := -Wall -Wextra -Werror -MMD
 CC := gcc
 
 ifneq ($(V),1)
