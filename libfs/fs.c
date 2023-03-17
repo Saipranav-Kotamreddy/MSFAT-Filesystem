@@ -292,7 +292,7 @@ int fs_write(int fd, void* buf, size_t count) {
 		buf_index += size_to_write;	
 	}
 
-	int am_written = count - size_left;
+	int am_written = buf_index;
 	open_files[fd].offset += am_written;
 	if (open_files[fd].offset > (int) fs->root_dir[ind_in_root].size) {
 		fs->root_dir[ind_in_root].size = open_files[fd].offset;
