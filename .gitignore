@@ -1,7 +1,5 @@
-Dockerfile
-test.sh
-apps/test_phase2.c
 **/*.x
 **/*.o
 **/*.d
 **/*.a
+libfs/oldfs.c

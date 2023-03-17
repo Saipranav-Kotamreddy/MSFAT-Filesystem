@@ -64,12 +64,9 @@ struct  __attribute__((__packed__)) file_system{
 };
 
 
-int fs_find_empty_entry(const char *filename) {
+int fs_find_empty_entry() {
 	int ind = 0;
 	while (ind < FS_FILE_MAX_COUNT && !no_file_exists(fs->root_dir[ind])) {
-		if (has_same_filename(fs->root_dir[ind], filename)) {
-			return -1;
-		}
 		ind++; 
 	}
 
@@ -130,6 +127,179 @@ bool fd_is_invalid(int fd) {
 	return fd < 0 || fd >= FS_OPEN_MAX_COUNT;
 }
 
+bool open_table_all_files_closed() {
+	int ind_to_open = 0;
+	while (ind_to_open < FS_OPEN_MAX_COUNT) {
+		if (!open_files[ind_to_open].empty) {
+			return false;
+		}
+		ind_to_open++;
+	}
+	return true;
+}
+
+
+uint16_t get_fat_at_index(int index) {
+	int fat_block_ind = index / 2048;
+	int ind_in_fat_block = index % 4096;
+	return fs->fat[fat_block_ind]->fat_array[ind_in_fat_block];
+}
+
+void set_fat_at_index(int index, int new_value) {
+	int fat_block_ind = index / 2048;
+	int ind_in_fat_block = index % 4096;
+	fs->fat[fat_block_ind]->fat_array[ind_in_fat_block] = new_value;
+}
+
+int find_first_free_fat() {
+	int index = 1;
+	while (index < fs->superblock->data_size && get_fat_at_index(index) != 0) {
+		index++;
+	}
+	if (index == fs->superblock->data_size) {
+		return -1;
+	}
+	return index;
+}
+
+int allocate_new_fat() {
+	int new_fat = find_first_free_fat();
+	if (new_fat == -1) {
+		return -1;
+	}
+	set_fat_at_index(new_fat, FAT_EOC);
+	return new_fat;
+}
+
+int get_next_fat(int index) {
+	int fat_at_index = get_fat_at_index(index);
+	if (fat_at_index == FAT_EOC) {
+		int new_fat = allocate_new_fat();
+		if (new_fat == -1) {
+			return -1;
+		}
+		set_fat_at_index(index, new_fat);
+		return new_fat;
+	}
+	return fat_at_index;
+}
+
+int get_block_of_offset(int offset, int index_in_root) {
+	int curr_block_index = fs->root_dir[index_in_root].data_index;
+	if (curr_block_index == FAT_EOC) {
+		curr_block_index = allocate_new_fat();
+		if (curr_block_index == -1) {
+			return -1;
+		}
+		fs->root_dir[index_in_root].data_index = curr_block_index;
+	}
+	int num_fat_blocks_to_traverse = 1 + (offset / BLOCK_SIZE); 
+	for (int i = 0; i < num_fat_blocks_to_traverse - 1; i++) {
+		// Todo: do we need to handle this case where the file offset is moved too far past size of disk?
+		curr_block_index = get_next_fat(curr_block_index);
+	}
+	return curr_block_index;
+}
+
+int convert_to_disk_index(int block_index) {
+	return block_index + fs->superblock->data_index;
+}
+
+int min(int a, int b) {
+	if (a < b) return a;
+	return b;
+}
+
+
+int fs_read(int fd, void* buf, size_t count) {
+	/* Basic -1 checks */
+	if (fs == NULL || fd_is_invalid(fd) || open_files[fd].empty || buf == NULL) {
+		return -1;
+	}
+
+	/* Variable Initialization */
+	int offset = open_files[fd].offset;
+	int ind_in_root = open_files[fd].index_in_rootdir;
+	int buf_index = 0;
+	int size_left = min(count, fs_stat(fd) - offset);
+	int block_index, offset_in_current_block;
+
+	while (size_left > 0) {
+		if (buf_index == 0) {
+			block_index = get_block_of_offset(offset, ind_in_root);
+			offset_in_current_block = offset % BLOCK_SIZE;
+		} else {
+			block_index = get_fat_at_index(block_index);
+			offset_in_current_block = 0;
+		}
+		
+		//printf("Block %d, offset %d, size left: %d, count: %d\n", block_index, offset_in_current_block, size_left, count);
+
+		if (block_index == -1 || block_index == FAT_EOC) {
+			break;
+		}
+
+		char* bounce_buffer = malloc(sizeof(char) * BLOCK_SIZE);
+		block_read(convert_to_disk_index(block_index), bounce_buffer);
+		int size_in_bounce_buffer = BLOCK_SIZE - offset_in_current_block;
+		int size_to_read = min(size_in_bounce_buffer, size_left);
+		memcpy(buf + buf_index, bounce_buffer + offset_in_current_block, size_to_read);
+
+		size_left -= size_to_read;
+		buf_index += size_to_read;
+	}
+
+	int am_read = buf_index;
+	open_files[fd].offset += am_read;
+	return am_read;
+}
+
+
+int fs_write(int fd, void* buf, size_t count) {
+	/* Basic checks */
+	if (fs == NULL || fd_is_invalid(fd) || open_files[fd].empty || buf == NULL) {
+		return -1;
+	}
+
+	/* Variable Initialization */
+	int offset = open_files[fd].offset;
+	int ind_in_root = open_files[fd].index_in_rootdir;
+	int buf_index = 0;
+	int size_left = count;
+	int block_index, offset_in_current_block;
+
+	while (size_left > 0) {
+		if (buf_index == 0) {
+			block_index = get_block_of_offset(offset, ind_in_root);
+			offset_in_current_block = offset % BLOCK_SIZE;
+		} else {
+			block_index = get_next_fat(block_index);
+			offset_in_current_block = 0;
+		}
+
+		if (block_index == -1) {
+			break;
+		}
+
+		char* bounce_buffer = malloc(sizeof(char) * BLOCK_SIZE);
+		block_read(convert_to_disk_index(block_index), bounce_buffer);
+		int size_in_bounce_buffer = BLOCK_SIZE - offset_in_current_block;
+		int size_to_write = min(size_in_bounce_buffer, size_left);
+		memcpy(bounce_buffer + offset_in_current_block, buf + buf_index, size_to_write);
+		block_write(convert_to_disk_index(block_index), bounce_buffer);
+
+		size_left -= size_to_write;
+		buf_index += size_to_write;	
+	}
+
+	int am_written = buf_index;
+	open_files[fd].offset += am_written;
+	if (open_files[fd].offset > (int) fs->root_dir[ind_in_root].size) {
+		fs->root_dir[ind_in_root].size = open_files[fd].offset;
+	}
+	return am_written;
+}
+
 /* ---------------- File System Methods ---------------- */
 
 int fs_mount(const char *diskname)
@@ -143,31 +313,19 @@ int fs_mount(const char *diskname)
 		return -1;
 	}
 	//Insert error checking on disk info here
-	char* correct_name = "ECS150FS";
-	char* signature = malloc(9);
-	strcpy(signature, fs->superblock->signature);
-	//strcpy(comparison, signature);
-	signature[8]='\0';
+	char* signature = fs->superblock->signature;
 	uint8_t fat_size = fs->superblock->fat_size;
 	uint16_t root_index = fs->superblock->root_index;
 	uint16_t data_index = fs->superblock->data_index;
 	uint16_t data_count = fs->superblock->data_size;
 	uint16_t total_blocks = fs->superblock->total_blocks;
-	printf("Signature: %s\n", signature);
-	printf("FAT count: %d\n", fat_size);
-	printf("Root index: %d\n", root_index);
-	printf("Data index: %d\n", data_index);
-	printf("Data Count: %d\n", data_count);
-	printf("Total: %d\n", total_blocks);
-	printf("Compare: %d\n", strcmp(signature, correct_name));
-	if(strcmp(signature,"ECS150FS")!=0 || (1+fat_size)!=root_index || (root_index+1)!=data_index){
+	if(strncmp(signature,"ECS150FS",8)!=0 || (1+fat_size)!=root_index || (root_index+1)!=data_index){
 		free(signature);
 		free(fs->superblock);
 		free(fs);
 		return -1;
 	}
-	free(signature);
-
+	
 	if(block_disk_count()!=total_blocks || (1+fat_size+1+data_count)!=total_blocks){
 		free(fs->superblock);
 		free(fs);
@@ -234,20 +392,32 @@ int fs_mount(const char *diskname)
 
 int fs_umount(void)
 {
-	/* TODO: Phase 1 */
+	if (fs == NULL || !open_table_all_files_closed()) {
+		return -1;
+	}
+
 	uint8_t fat_size = fs->superblock->fat_size;
 	uint16_t data_count = fs->superblock->data_size;
 	for(int i=0; i<fat_size; i++){
+		if(block_write(i+1, fs->fat[i])==-1){
+			printf("Block write failed --FS UMOUNT\n");
+			exit(1);
+		}
 		free(fs->fat[i]);
 	}
-	for(int j=0; j<data_count; j++){
-		free(fs->data_blocks[j]);
+
+	for(int i=0; i<data_count; i++){
+		free(fs->data_blocks[i]);
 	}
-	//free(fs->data_blocks);
-	//free(fs->fat);
+
+	uint16_t root_index = fs->superblock->root_index;
+	if(block_write(root_index, fs->root_dir)==-1){
+		printf("Problem with writing root\n");
+		exit(1);
+	}
+
 	free(fs->superblock);
 	free(fs);
-	//Add check for open file descriptors
 	if(block_disk_close()==-1){
 		return -1;
 	}
@@ -256,6 +426,9 @@ int fs_umount(void)
 
 int fs_info(void)
 {
+	if (fs == NULL) {
+		return -1;
+	}
 	printf("FS Info:\n");
 	uint8_t fat_size = fs->superblock->fat_size;
 	uint16_t root_index = fs->superblock->root_index;
@@ -264,8 +437,12 @@ int fs_info(void)
 	uint16_t total_blocks = fs->superblock->total_blocks;
 	int free_fat_blocks=0;
 	int free_root_space=0;
+	int num_blocks_traversed = 0;
 	for(int i=0; i<fat_size;i++){
+		if (num_blocks_traversed >= data_count) break;
 		for(int k=0; k<2048; k++){
+			if (num_blocks_traversed >= data_count) break;
+			num_blocks_traversed += 1;
 			if(fs->fat[i]->fat_array[k]==0){
 				free_fat_blocks++;
 			}
@@ -281,18 +458,19 @@ int fs_info(void)
 	printf("rdir_blk=%d\n", root_index);
 	printf("data_blk=%d\n", data_index);
 	printf("data_blk_count=%d\n", data_count);
-	printf("fat_free_ratio=%d/%d\n", free_fat_blocks, fat_size*2048);
+	printf("fat_free_ratio=%d/%d\n", free_fat_blocks, data_count);
 	printf("rdir_free_ratio=%d/128\n", free_root_space);
-	return -1;
+	return 0;
 }
 
 int fs_create(const char *filename)
 {	
-	if(fs == NULL || filename == NULL || strlen(filename) >= FS_FILENAME_LEN || filename_is_invalid(filename)){
+
+	if(fs == NULL || filename == NULL || strlen(filename) >= FS_FILENAME_LEN || filename_is_invalid(filename) || fs_find_matching_entry(filename) != -1){
 		return -1;
 	}	
 
-	int ind_to_add = fs_find_empty_entry(filename);
+	int ind_to_add = fs_find_empty_entry();
 	if(ind_to_add == -1) {
 		return -1;
 	} else {
@@ -393,21 +571,5 @@ int fs_lseek(int fd, size_t offset)
 		return -1;
 	}
 
-	return 0;
-}
-
-int fs_write(int fd, void *buf, size_t count)
-{
-	if(fd || buf || count){
-		return -1;
-	}
-	return 0;
-}
-
-int fs_read(int fd, void *buf, size_t count)
-{
-	if(fd || buf || count){
-		return -1;
-	}
 	return 0;
 }
