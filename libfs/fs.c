@@ -437,8 +437,12 @@ int fs_info(void)
 	uint16_t total_blocks = fs->superblock->total_blocks;
 	int free_fat_blocks=0;
 	int free_root_space=0;
+	int num_blocks_traversed = 0;
 	for(int i=0; i<fat_size;i++){
+		if (num_blocks_traversed >= data_count) break;
 		for(int k=0; k<2048; k++){
+			if (num_blocks_traversed >= data_count) break;
+			num_blocks_traversed += 1;
 			if(fs->fat[i]->fat_array[k]==0){
 				free_fat_blocks++;
 			}
@@ -454,7 +458,7 @@ int fs_info(void)
 	printf("rdir_blk=%d\n", root_index);
 	printf("data_blk=%d\n", data_index);
 	printf("data_blk_count=%d\n", data_count);
-	printf("fat_free_ratio=%d/%d\n", free_fat_blocks, fat_size*2048);
+	printf("fat_free_ratio=%d/%d\n", free_fat_blocks, data_count);
 	printf("rdir_free_ratio=%d/128\n", free_root_space);
 	return 0;
 }
