@@ -220,16 +220,13 @@ int min(int a, int b) {
 	return b;
 }
 
-/*
-	fs read:
-
-	get offset, ind in root
-
-
-
-*/
 
 int fs_read(int fd, void* buf, size_t count) {
+	/* Basic -1 checks */
+	if (fs == NULL || fd_is_invalid(fd) || open_files[fd].empty || buf == NULL) {
+		return -1;
+	}
+
 	/* Variable Initialization */
 	int offset = open_files[fd].offset;
 	int ind_in_root = open_files[fd].index_in_rootdir;
@@ -269,6 +266,11 @@ int fs_read(int fd, void* buf, size_t count) {
 
 
 int fs_write(int fd, void* buf, size_t count) {
+	/* Basic checks */
+	if (fs == NULL || fd_is_invalid(fd) || open_files[fd].empty || buf == NULL) {
+		return -1;
+	}
+
 	/* Variable Initialization */
 	int offset = open_files[fd].offset;
 	int ind_in_root = open_files[fd].index_in_rootdir;
@@ -436,6 +438,9 @@ int fs_umount(void)
 
 int fs_info(void)
 {
+	if (fs == NULL) {
+		return -1;
+	}
 	printf("FS Info:\n");
 	uint8_t fat_size = fs->superblock->fat_size;
 	uint16_t root_index = fs->superblock->root_index;
@@ -463,7 +468,7 @@ int fs_info(void)
 	printf("data_blk_count=%d\n", data_count);
 	printf("fat_free_ratio=%d/%d\n", free_fat_blocks, fat_size*2048);
 	printf("rdir_free_ratio=%d/128\n", free_root_space);
-	return -1;
+	return 0;
 }
 
 int fs_create(const char *filename)
@@ -576,104 +581,3 @@ int fs_lseek(int fd, size_t offset)
 
 	return 0;
 }
-
-
-
-// int fs_read(int fd, void *buf, size_t count)
-// {
-// 	if(fd || buf || count){
-// 		return -1;
-// 	}
-// 	return 0;
-// }
-
-// int fs_read(int fd, void *buf, size_t count)
-// {
-// 	if(fs == NULL || fd_is_invalid(fd) || buf == NULL){
-// 		return -1;
-// 	}
-// 	memset(buf, '\0', count);
-// 	//printf("Check1\n");
-// 	char* bounce_buffer = malloc(4096);
-// 	int starting_offset = open_files[fd].offset;
-// 	int updating_offset = starting_offset;
-// 	int file_size = fs_stat(fd);
-// 	size_t remaining_data = file_size-starting_offset;
-// 	int starting_data_index = fs->superblock->data_index;
-// 	int current_data_index = fs->root_dir[open_files[fd].index_in_rootdir].data_index;
-// 	int fat_block = current_data_index/4096;
-// 	int actual_index = current_data_index + starting_data_index;
-// 	int total_count=0;
-// 	while(updating_offset>=4096){
-// 		current_data_index = fs->fat[fat_block]->fat_array[current_data_index%4096];
-// 		fat_block = current_data_index/4096;
-// 		actual_index = current_data_index + starting_data_index;
-// 		updating_offset-=4096;
-// 	}
-
-// 	int first_read_count =0;
-// 	size_t left_in_block=0;
-// 	if(remaining_data<(size_t)(4096-updating_offset)){
-// 		left_in_block=remaining_data;
-// 	}
-// 	else{
-// 		left_in_block=(4096-updating_offset);
-// 	}
-
-// 	if(left_in_block<count){
-// 		first_read_count = left_in_block;
-// 	}
-// 	else{
-// 		first_read_count=count;
-// 	}
-// 	//printf("Block read: %d\n", actual_index);
-// 	if(block_read(actual_index, bounce_buffer)==-1){
-// 		free(bounce_buffer);
-// 		return -1;
-// 	}
-// 	//printf("Check2\n");
-// 	memcpy(buf, &bounce_buffer[updating_offset], first_read_count);
-// 	//printf("Buffer: %s\n", (char*)buf);
-// 	//printf("Buffer2: %s\n", bounce_buffer);
-// 	count -= first_read_count;
-// 	total_count+= first_read_count;
-// 	remaining_data-=first_read_count;
-// 	bool last_read;
-// 	if(count==0 || remaining_data==0){
-// 		last_read = true;
-// 	}
-// 	else{
-// 		last_read=false;
-// 	}
-
-// 	while(!last_read){
-// 		current_data_index = fs->fat[fat_block]->fat_array[current_data_index%4096];
-// 		fat_block = current_data_index/4096;
-// 		actual_index = current_data_index + starting_data_index;
-// 		if(count<4096 || remaining_data<4096){
-// 			last_read=true;
-// 		}
-// 		if(block_read(actual_index, bounce_buffer)==-1){
-// 			free(bounce_buffer);
-// 			return -1;
-// 		}
-// 		if(last_read){
-// 			//Only read what's needed on last block
-// 			int last_read_amount = (count<remaining_data) ? count : remaining_data;
-// 			memcpy(&((char*)buf)[total_count], bounce_buffer, last_read_amount);
-// 			count-= last_read_amount;
-// 			total_count+= last_read_amount;
-// 			remaining_data-= last_read_amount;
-// 		}
-// 		else{
-// 			memcpy(&((char*)&buf)[total_count], bounce_buffer, 4096);
-// 			count -= 4096;
-// 			total_count+= 4096;
-// 			remaining_data-= 4096;
-// 		}
-// 	}
-// 	//printf("Check3\n");
-// 	free(bounce_buffer);
-// 	fs_lseek(fd, starting_offset+total_count);
-// 	return total_count;
-// }
